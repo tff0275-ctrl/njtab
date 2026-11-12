@@ -37,7 +37,7 @@ local function getActiveLocations()
 end
 
 local DISCORD_URL = "https://discord.gg/AARKx7wRWF"
-local SCRIPT_URL  = "ddd"
+local SCRIPT_URL  = "https://raw.githubusercontent.com/tff0275-ctrl/njtab/refs/heads/main/Dkdidk"
 local KEY_FILE    = "we_server_v422_key.json"
 local BLACKLIST_FILE = "we_server_v422_blacklist.json"
 local BAN_FILE    = "we_server_v422_userban.json"
