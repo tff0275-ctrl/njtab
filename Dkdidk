@@ -1,0 +1,2128 @@
+-- ==========================================
+-- ✨ WE SERVER - KW Auto v4.22 (Lockpick Only)
+-- ⚡ وضع البرق: سرقة وحدة → سيرفر جديد → تلقائي
+-- https://discord.gg/AARKx7wRWF
+-- ==========================================
+print("[WE SERVER] ⏳ تحميل v4.22 (وضع البرق)...")
+
+local KEYS_RAW = {
+    ["عزوز"] = {userId = 0, hours = 0, shared = true},
+    ["براء"] = {userId = 0, hours = 0, shared = true},
+}
+
+local KEYS = {}
+for k, v in pairs(KEYS_RAW) do
+    KEYS[k] = { userId = v.userId or 0, hours = v.hours or 0, shared = v.shared or false }
+end
+pcall(function() table.freeze(KEYS) end)
+
+local LOCATIONS = {
+    {pos = Vector3.new(-471, 6, -286),          name = "الموقع 1"},
+    {pos = Vector3.new(-354, 3, -279),          name = "الموقع 2"},
+    {pos = Vector3.new(505, 7, -312),           name = "الموقع 3"},
+    {pos = Vector3.new(-950.01, 3.76, -282.45), name = "الموقع 4"},
+    {pos = Vector3.new(594.0, 4.3, -349.6),     name = "الموقع 5"},
+    {pos = Vector3.new(-95.4, 8.7, 557.2),      name = "الموقع 6"},
+    {pos = Vector3.new(1296.9, 3.8, -221.0),    name = "الموقع 7"},
+    {pos = Vector3.new(-1744.7, 11.0, -32330.4), name = "الموقع 8", on = false},
+    {pos = Vector3.new(1292.2, 3.8, -215.4),     name = "الموقع 9"},
+}
+
+local function getActiveLocations()
+    local out = {}
+    for _, loc in ipairs(LOCATIONS) do
+        if loc.on ~= false then table.insert(out, loc) end
+    end
+    return out
+end
+
+local DISCORD_URL = "https://discord.gg/AARKx7wRWF"
+local SCRIPT_URL  = "ddd"
+local KEY_FILE    = "we_server_v422_key.json"
+local BLACKLIST_FILE = "we_server_v422_blacklist.json"
+local BAN_FILE    = "we_server_v422_userban.json"
+local ATTEMPTS_FILE = "we_server_v422_attempts.json"
+local BIND_FILE   = "we_server_v422_keybind.json"
+local VISITED_FILE = "we_server_v422_visited.json"
+local START_PREFIX = "we_v422_start_"
+local WEBHOOK_URL = "https://discord.com/api/webhooks/1554171437005148202/rcb55OexGArlGbJkZzBbGdhHW4DaFWxc3KrmzOtgKHGizu71FUN-40gZOBmApCt09KCR"
+
+local MAX_WRONG_ATTEMPTS = 3
+
+local LP = game:GetService("Players").LocalPlayer
+local PG = LP:WaitForChild("PlayerGui")
+local HS = game:GetService("HttpService")
+local VIM = game:GetService("VirtualInputManager")
+local TS = game:GetService("TeleportService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local VirtualUser = game:GetService("VirtualUser")
+local UIS = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+
+local scriptStartTime = os.time()
+local sessionOffset = Vector3.new(math.random(-2, 2), 0, math.random(-2, 2))
+
+local _readfile = readfile or (syn and syn.readfile) or (fluxus and fluxus.readfile) or (Krnl and Krnl.readfile)
+local _writefile = writefile or (syn and syn.writefile) or (fluxus and fluxus.writefile) or (Krnl and Krnl.writefile)
+
+local CONFIG = {
+    OneRobPerServer = true,
+    FastMode = true,
+    Humanize = false,
+    StartDelay = 1,
+    MaxPressTime = 25,
+    PressInterval = 0.4,
+    BuyAttempts = 2,
+    BuyTimeout = 12,
+    VerifyWait = 0.25,
+    WaitBetweenCashiers = 175,
+    TimerBuffer = 5,
+    FreezeCharacter = true,
+    InvisibleWhileRobbing = true,
+    CamDistance = 8, CamHeight = 4, CamLookHeight = 1.2,
+    WatchdogInterval = 10,
+    CameraFPS = 15,
+    AntiAFKEnabled = true, AntiAFKInterval = 25,
+    BuyBeforeEveryRob = true,
+    HangTimeout = 60,
+    AutoStart = true,
+    AutoStartDelay = 2,
+    FPSCap = 60,
+    VoidGuard = true,
+    VoidLimitY = -200,
+    ButtonRadius = 60,
+    BusyRadius = 12,
+    AvoidRecentServers = true,
+    RecentServerMinutes = 30,
+    KeySpamEnabled = true,
+    KeySpamInterval = 0.03,
+    RobTimeout = 30,
+}
+
+local function fw(x)
+    if CONFIG.FastMode then return math.max(0.05, x * 0.4) end
+    return x
+end
+
+local function rnd(base, spread)
+    if not CONFIG.Humanize then return base end
+    local v = base + math.random(-math.floor(spread*10), math.floor(spread*10)) / 10
+    if v < 0.2 then v = 0.2 end
+    return v
+end
+
+local function fmtT(sec)
+    if not sec or sec <= 0 then return "0د" end
+    local h = math.floor(sec / 3600)
+    local m = math.floor((sec % 3600) / 60)
+    if h > 0 then return h .. "س " .. m .. "د" end
+    return m .. "د"
+end
+
+local function formatClockTime(seconds)
+    local s = seconds % 60
+    local m = (seconds // 60) % 60
+    local h = (seconds // 3600) % 24
+    return string.format("%02d:%02d:%02d", h, m, s)
+end
+
+local function getInfo()
+    return {
+        name = LP.Name or "?",
+        display = LP.DisplayName or LP.Name or "?",
+        userId = tostring(LP.UserId or 0),
+        jobId = tostring(game.JobId or "?"),
+        placeId = tostring(game.PlaceId or "?"),
+    }
+end
+
+local function normalizeKey(k)
+    local s = tostring(k or "")
+    s = s:gsub("\226\128\139", ""):gsub("\226\128\140", "")
+    s = s:gsub("\226\128\141", ""):gsub("\239\187\191", "")
+    s = s:gsub("\217[\128-\191]", "")
+    s = s:gsub("%s", "")
+    return s
+end
+
+local actionLog = {
+    autoStart = false, normalStart = false, repeatStart = false,
+    serverHop = 0, buyCount = 0, robCount = 0,
+    stopCount = 0, errors = 0, sessions = 0,
+    skipped = 0, busy = 0,
+}
+
+local function safeGetConnections(obj, signal)
+    if not getconnections then return {} end
+    local ok, res = pcall(getconnections, obj[signal])
+    if ok and res then return res end
+    return {}
+end
+
+local function sendWebhook(title, fields, color)
+    task.spawn(function()
+        local ok0, p = pcall(getInfo)
+        if not ok0 then p = {name="?",display="?",userId="?",jobId="?",placeId="?"} end
+        local sessionFields = {
+            {name = "👤 اللاعب", value = p.display .. " (@" .. p.name .. ")", inline = true},
+            {name = "🆔 الآيدي", value = p.userId, inline = true},
+            {name = "⏱️ مدة التشغيل", value = fmtT(os.time() - scriptStartTime), inline = true},
+            {name = "🌍 السيرفر", value = p.jobId:sub(1, 20), inline = false},
+        }
+        for _, field in ipairs(fields or {}) do table.insert(sessionFields, field) end
+        local actionsSummary = string.format(
+            "💰 سرقات: %d | 🛒 شراء: %d | 🌍 انتقالات: %d\n⏭️ تخطي: %d | ⚠️ مشغول: %d | ❌ أخطاء: %d",
+            actionLog.robCount, actionLog.buyCount, actionLog.serverHop,
+            actionLog.skipped, actionLog.busy, actionLog.errors
+        )
+        table.insert(sessionFields, {name = "📋 ملخص", value = actionsSummary, inline = false})
+        local ok1, body = pcall(HS.JSONEncode, HS, {
+            embeds = {{
+                title = title or "WE SERVER",
+                color = color or 0x8B5CF6,
+                fields = sessionFields,
+                footer = {text = "WE SERVER v4.22 ⚡ • " .. os.date("%Y-%m-%d %H:%M:%S")},
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+            }}
+        })
+        if not ok1 then return end
+        local opts = { Url = WEBHOOK_URL, Method = "POST", Headers = {["Content-Type"] = "application/json"}, Body = body }
+        if request then pcall(request, opts)
+        elseif syn and syn.request then pcall(syn.request, opts)
+        elseif http and http.request then pcall(http.request, opts)
+        elseif fluxus and fluxus.request then pcall(fluxus.request, opts)
+        elseif fetch then pcall(fetch, opts) end
+    end)
+end
+
+local function logAction(actionName, details)
+    sendWebhook("📝 " .. actionName, {
+        {name = "📄 التفاصيل", value = tostring(details or "-"), inline = false},
+    }, 0x3B82F6)
+end
+
+pcall(function()
+    local kickedSignal = LP.Kicked
+    if kickedSignal then
+        kickedSignal:Connect(function(reason)
+            pcall(function()
+                sendWebhook("🚪 طرد من اللعبة!", {
+                    {name = "📝 السبب", value = tostring(reason), inline = false},
+                }, 0xFF0000)
+            end)
+        end)
+    end
+end)
+
+local boostApplied = false
+local function applyPerformanceBoost()
+    if boostApplied then return end
+    boostApplied = true
+    task.spawn(function()
+        pcall(function()
+            Lighting.GlobalShadows = false
+            Lighting.FogEnd = 1e10
+            Lighting.Brightness = 0
+        end)
+        pcall(function() settings().Rendering.QualityLevel = "Level01" end)
+        pcall(function()
+            game:GetService("UserSettings"):GetService("UserGameSettings").SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel1
+        end)
+        pcall(function() if setfpscap then setfpscap(CONFIG.FPSCap) end end)
+
+        local okL, list = pcall(function() return workspace:GetDescendants() end)
+        if okL and list then
+            for i = 1, #list, 300 do
+                local lastI = math.min(i + 299, #list)
+                pcall(function()
+                    for j = i, lastI do
+                        local v = list[j]
+                        if v:IsA("BasePart") then
+                            v.Material = Enum.Material.SmoothPlastic
+                            v.Reflectance = 0
+                        elseif v:IsA("Decal") then
+                            v.Transparency = 1
+                        elseif v:IsA("ParticleEmitter") or v:IsA("Trail") then
+                            v.Enabled = false
+                        end
+                    end
+                end)
+                task.wait()
+            end
+        end
+
+        pcall(function()
+            workspace.DescendantAdded:Connect(function(c)
+                pcall(function()
+                    if c:IsA("Decal") then c.Transparency = 1
+                    elseif c:IsA("ParticleEmitter") or c:IsA("Trail") then c.Enabled = false end
+                end)
+            end)
+        end)
+        print("[WE SERVER] ⚡ التخفيف شغال")
+    end)
+end
+
+applyPerformanceBoost()
+
+task.spawn(function()
+    pcall(function() if setfpscap then setfpscap(CONFIG.FPSCap) end end)
+end)
+
+local function readLocal(n)
+    if not _readfile then return nil end
+    local ok, d = pcall(_readfile, n)
+    if ok and d then return d end
+    return nil
+end
+
+local function writeLocal(n, d)
+    if not _writefile then return false end
+    return pcall(_writefile, n, d)
+end
+
+local visitedJobs = {}
+
+local function loadVisited()
+    local raw = readLocal(VISITED_FILE)
+    if not raw then return end
+    local ok, data = pcall(HS.JSONDecode, HS, raw)
+    if ok and type(data) == "table" then visitedJobs = data end
+end
+
+local function saveVisited()
+    local ok, enc = pcall(HS.JSONEncode, HS, visitedJobs)
+    if ok and enc then writeLocal(VISITED_FILE, enc) end
+end
+
+local function markVisited(jobId)
+    if not jobId or jobId == "" then return end
+    visitedJobs[jobId] = os.time()
+    for id, t in pairs(visitedJobs) do
+        if os.time() - t > 7200 then visitedJobs[id] = nil end
+    end
+    saveVisited()
+end
+
+local function wasRecent(jobId)
+    if not CONFIG.AvoidRecentServers then return false end
+    local t = visitedJobs[jobId]
+    if not t then return false end
+    return (os.time() - t) < (CONFIG.RecentServerMinutes * 60)
+end
+
+loadVisited()
+
+local bannedUsers = {}
+local function loadBannedUsers()
+    local raw = readLocal(BAN_FILE)
+    if not raw then return end
+    local ok, data = pcall(HS.JSONDecode, HS, raw)
+    if ok and type(data) == "table" then bannedUsers = data end
+end
+local function saveBannedUsers()
+    local ok, enc = pcall(HS.JSONEncode, HS, bannedUsers)
+    if ok and enc then writeLocal(BAN_FILE, enc) end
+end
+local function isUserBanned() return bannedUsers[tostring(LP.UserId)] ~= nil end
+local function banUser(reason)
+    bannedUsers[tostring(LP.UserId)] = { reason = reason or "مخالفة", time = os.time(), name = LP.Name, display = LP.DisplayName }
+    saveBannedUsers()
+end
+local function unbanUser(viaKey)
+    if bannedUsers[tostring(LP.UserId)] then
+        bannedUsers[tostring(LP.UserId)] = nil
+        saveBannedUsers()
+    end
+end
+
+local wrongAttempts = {}
+local function loadAttempts()
+    local raw = readLocal(ATTEMPTS_FILE)
+    if not raw then return end
+    local ok, data = pcall(HS.JSONDecode, HS, raw)
+    if ok and type(data) == "table" then wrongAttempts = data end
+end
+local function saveAttempts()
+    local ok, enc = pcall(HS.JSONEncode, HS, wrongAttempts)
+    if ok and enc then writeLocal(ATTEMPTS_FILE, enc) end
+end
+local function getWrongCount() return wrongAttempts[tostring(LP.UserId)] or 0 end
+local function incrementWrongCount()
+    local uid = tostring(LP.UserId)
+    wrongAttempts[uid] = (wrongAttempts[uid] or 0) + 1
+    saveAttempts()
+    return wrongAttempts[uid]
+end
+local function resetWrongCount()
+    wrongAttempts[tostring(LP.UserId)] = 0
+    saveAttempts()
+end
+
+local blacklistedKeys = {}
+local function loadBlacklist()
+    local raw = readLocal(BLACKLIST_FILE)
+    if not raw then return end
+    local ok, data = pcall(HS.JSONDecode, HS, raw)
+    if ok and type(data) == "table" then blacklistedKeys = data end
+end
+local function saveBlacklist()
+    local ok, enc = pcall(HS.JSONEncode, HS, blacklistedKeys)
+    if ok and enc then writeLocal(BLACKLIST_FILE, enc) end
+end
+local function addToBlacklist(key, reason)
+    if key and key ~= "" then
+        blacklistedKeys[key] = { banned = true, reason = reason or "انتهت الصلاحية", time = os.time(), userId = tostring(LP.UserId) }
+        saveBlacklist()
+    end
+end
+local function isKeyBlacklisted(key)
+    local entry = blacklistedKeys[key]
+    if type(entry) == "table" then return entry.banned == true end
+    return entry == true
+end
+
+local keyBindings = {}
+local function loadKeyBindings()
+    local raw = readLocal(BIND_FILE)
+    if not raw then return end
+    local ok, data = pcall(HS.JSONDecode, HS, raw)
+    if ok and type(data) == "table" then keyBindings = data end
+end
+local function saveKeyBindings()
+    local ok, enc = pcall(HS.JSONEncode, HS, keyBindings)
+    if ok and enc then writeLocal(BIND_FILE, enc) end
+end
+local function bindKeyToUser(key, userId)
+    keyBindings[key] = tostring(userId)
+    saveKeyBindings()
+end
+local function getKeyBinding(key) return keyBindings[key] end
+
+loadBlacklist(); loadBannedUsers(); loadAttempts(); loadKeyBindings()
+
+local function getSavedKey()
+    local raw = readLocal(KEY_FILE)
+    if not raw or raw == "" then return nil end
+    local ok, data = pcall(HS.JSONDecode, HS, raw)
+    if ok and data and data.key then return data.key end
+    return nil
+end
+local function saveKey(key)
+    local ok, enc = pcall(HS.JSONEncode, HS, {key = key})
+    if ok and enc then writeLocal(KEY_FILE, enc) end
+end
+local function getStartTime(key)
+    local raw = readLocal(START_PREFIX .. tostring(key) .. ".json")
+    if not raw then return nil end
+    local ok, data = pcall(HS.JSONDecode, HS, raw)
+    if ok and data and data.startedAt then return data.startedAt end
+    return nil
+end
+local function saveStartTime(key, t)
+    local ok, enc = pcall(HS.JSONEncode, HS, {startedAt = t})
+    if ok and enc then writeLocal(START_PREFIX .. tostring(key) .. ".json", enc) end
+end
+
+local function validateKey(rawInput)
+    if not rawInput or rawInput == "" then return false, "الرجاء إدخال مفتاح", nil end
+    local inputKey = normalizeKey(rawInput)
+    if inputKey == "" then return false, "الرجاء إدخال مفتاح", nil end
+
+    local entry = KEYS[inputKey]
+    local isMaster = (entry ~= nil) and ((tonumber(entry.hours) or 0) <= 0)
+
+    if isMaster and isKeyBlacklisted(inputKey) then
+        blacklistedKeys[inputKey] = nil
+        saveBlacklist()
+    end
+
+    if not entry then
+        if isKeyBlacklisted(inputKey) then
+            return false, "❌ هذا المفتاح محظور نهائياً.", nil
+        end
+        if isUserBanned() then
+            return false, "🚫 أنت محظور.\n🔓 فقط مفتاح دائم يفك الحظر.", nil
+        end
+        local count = incrementWrongCount()
+        if count >= MAX_WRONG_ATTEMPTS then
+            banUser("3 محاولات مفتاح خاطئة")
+            return false, "🚫 تم حظرك بعد " .. MAX_WRONG_ATTEMPTS .. " محاولات خاطئة!", nil
+        end
+        return false, "❌ المفتاح غير صحيح\n⚠️ محاولات متبقية: " .. (MAX_WRONG_ATTEMPTS - count), nil
+    end
+
+    local reqId = tonumber(entry.userId) or 0
+    if reqId ~= 0 and reqId ~= LP.UserId then
+        return false, "❌ هذا المفتاح لا يخص حسابك.", nil
+    end
+
+    local duration = tonumber(entry.hours) or 0
+
+    if duration <= 0 then
+        unbanUser(inputKey)
+        resetWrongCount()
+        bindKeyToUser(inputKey, LP.UserId)
+        return true, "مفتاح دائم ♾️", 0
+    end
+
+    if isKeyBlacklisted(inputKey) then
+        return false, "❌ هذا المفتاح انتهى وحُظر نهائياً.", nil
+    end
+    local existingBind = getKeyBinding(inputKey)
+    if existingBind and existingBind ~= "0" and existingBind ~= tostring(LP.UserId) then
+        return false, "❌ هذا المفتاح مربوط بمستخدم آخر.", nil
+    end
+    if isUserBanned() then
+        return false, "🚫 أنت محظور.", nil
+    end
+    if not existingBind then bindKeyToUser(inputKey, LP.UserId) end
+
+    local durationSec = duration * 3600
+    local startedAt = getStartTime(inputKey)
+    if not startedAt then
+        startedAt = os.time()
+        saveStartTime(inputKey, startedAt)
+    end
+    local remaining = durationSec - (os.time() - startedAt)
+    if remaining <= 0 then
+        addToBlacklist(inputKey, "انتهت المدة")
+        banUser("انتهاء صلاحية المفتاح")
+        return false, "⏰ انتهت مدة المفتاح.", 0
+    end
+    resetWrongCount()
+    return true, "مفتاح فعّال ⏳ " .. fmtT(remaining), remaining
+end
+
+local keyResult = {valid = false, reason = "", remaining = 0, key = nil}
+
+local function showKeyInput()
+    local sg = Instance.new("ScreenGui")
+    sg.Name = "WE_KeyInput"; sg.ResetOnSpawn = false
+    sg.DisplayOrder = 2147483646; sg.IgnoreGuiInset = true
+    sg.Parent = PG
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    bg.BackgroundTransparency = 0.2
+    bg.BorderSizePixel = 0; bg.Parent = sg
+
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(0, 420, 0, 290)
+    card.Position = UDim2.new(0.5, -210, 0.5, -145)
+    card.BackgroundColor3 = Color3.fromRGB(15, 10, 25)
+    card.BorderSizePixel = 0; card.Parent = bg
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 16)
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(160, 80, 240)
+    stroke.Thickness = 2; stroke.Parent = card
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 45)
+    title.Position = UDim2.new(0, 0, 0, 10)
+    title.BackgroundTransparency = 1
+    title.Text = "🔐 WE SERVER v4.22"
+    title.TextColor3 = Color3.fromRGB(200, 140, 255)
+    title.Font = Enum.Font.GothamBlack; title.TextSize = 26; title.Parent = card
+
+    local sub = Instance.new("TextLabel")
+    sub.Size = UDim2.new(1, 0, 0, 24)
+    sub.Position = UDim2.new(0, 0, 0, 56)
+    sub.BackgroundTransparency = 1
+    sub.Text = "رجاءً حط المفتاح (Enter للتأكيد)"
+    sub.TextColor3 = Color3.fromRGB(255, 255, 255)
+    sub.Font = Enum.Font.GothamBold; sub.TextSize = 15; sub.Parent = card
+
+    local warnLabel = Instance.new("TextLabel")
+    warnLabel.Size = UDim2.new(1, -50, 0, 18)
+    warnLabel.Position = UDim2.new(0, 25, 0, 82)
+    warnLabel.BackgroundTransparency = 1
+    if isUserBanned() then
+        warnLabel.Text = "🚫 أنت محظور! فقط مفتاح دائم يفك الحظر"
+        warnLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+    else
+        warnLabel.Text = "⚠️ محاولات متبقية: " .. (MAX_WRONG_ATTEMPTS - getWrongCount()) .. " / " .. MAX_WRONG_ATTEMPTS
+        warnLabel.TextColor3 = Color3.fromRGB(255, 200, 100)
+    end
+    warnLabel.Font = Enum.Font.GothamBold; warnLabel.TextSize = 10
+    warnLabel.TextWrapped = true; warnLabel.Parent = card
+
+    local box = Instance.new("TextBox")
+    box.Size = UDim2.new(1, -50, 0, 42)
+    box.Position = UDim2.new(0, 25, 0, 104)
+    box.BackgroundColor3 = Color3.fromRGB(30, 20, 45)
+    box.BorderSizePixel = 0
+    box.Text = ""
+    box.PlaceholderText = "الصق المفتاح هنا..."
+    box.TextColor3 = Color3.fromRGB(255, 255, 255)
+    box.PlaceholderColor3 = Color3.fromRGB(120, 100, 160)
+    box.Font = Enum.Font.GothamBold; box.TextSize = 15
+    box.ClearTextOnFocus = false; box.Parent = card
+    Instance.new("UICorner", box).CornerRadius = UDim.new(0, 10)
+
+    local bs = Instance.new("UIStroke")
+    bs.Color = Color3.fromRGB(120, 60, 180); bs.Thickness = 2; bs.Parent = box
+
+    local submit = Instance.new("TextButton")
+    submit.Size = UDim2.new(1, -50, 0, 40)
+    submit.Position = UDim2.new(0, 25, 0, 154)
+    submit.BackgroundColor3 = Color3.fromRGB(140, 60, 220)
+    submit.Text = "✅ تأكيد المفتاح"
+    submit.TextColor3 = Color3.fromRGB(255, 255, 255)
+    submit.Font = Enum.Font.GothamBlack; submit.TextSize = 16
+    submit.BorderSizePixel = 0; submit.Parent = card
+    Instance.new("UICorner", submit).CornerRadius = UDim.new(0, 10)
+
+    local err = Instance.new("TextLabel")
+    err.Size = UDim2.new(1, -50, 0, 42)
+    err.Position = UDim2.new(0, 25, 0, 200)
+    err.BackgroundTransparency = 1; err.Text = ""
+    err.TextColor3 = Color3.fromRGB(255, 100, 100)
+    err.Font = Enum.Font.GothamBold; err.TextSize = 11
+    err.TextWrapped = true; err.Parent = card
+
+    local checking = false
+    local function doSubmit()
+        if checking then return end
+        local key = box.Text
+        if not key or key == "" then
+            err.Text = "⚠️ اكتب المفتاح أول!"
+            return
+        end
+        checking = true
+        submit.Text = "⏳ يتحقق..."
+        submit.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+        err.Text = ""
+
+        task.spawn(function()
+            local okv, valid, reason, remaining = pcall(validateKey, key)
+            if not okv then valid, reason = false, "خطأ داخلي" end
+            if valid then
+                saveKey(key)
+                keyResult.valid = true
+                keyResult.reason = reason
+                keyResult.remaining = remaining or 0
+                keyResult.key = normalizeKey(key)
+                submit.Text = "✅ تم!"
+                submit.BackgroundColor3 = Color3.fromRGB(60, 180, 90)
+                task.wait(0.4)
+                pcall(function() sg:Destroy() end)
+            else
+                if isUserBanned() then
+                    warnLabel.Text = "🚫 أنت محظور! فقط مفتاح دائم يفك الحظر"
+                    warnLabel.TextColor3 = Color3.fromRGB(255, 80, 80)
+                else
+                    warnLabel.Text = "⚠️ محاولات متبقية: " .. math.max(0, MAX_WRONG_ATTEMPTS - getWrongCount()) .. " / " .. MAX_WRONG_ATTEMPTS
+                end
+                submit.Text = "❌ مفتاح غير شغال"
+                submit.BackgroundColor3 = Color3.fromRGB(180, 60, 60)
+                err.Text = "⚠️ " .. tostring(reason)
+                task.wait(1.5)
+                submit.Text = "✅ تأكيد المفتاح"
+                submit.BackgroundColor3 = Color3.fromRGB(140, 60, 220)
+            end
+            checking = false
+        end)
+    end
+
+    submit.MouseButton1Click:Connect(doSubmit)
+    box.FocusLost:Connect(function(enterPressed)
+        if enterPressed then doSubmit() end
+    end)
+end
+
+local function runKeyCheck()
+    local savedKey = getSavedKey()
+    if savedKey then
+        local okv, valid, reason, remaining = pcall(validateKey, savedKey)
+        if okv and valid then
+            keyResult.valid = true
+            keyResult.reason = reason
+            keyResult.remaining = remaining or 0
+            keyResult.key = normalizeKey(savedKey)
+            return
+        else
+            writeLocal(KEY_FILE, "{}")
+        end
+    end
+    showKeyInput()
+    local timeout = os.clock() + 600
+    while not keyResult.valid do
+        task.wait(0.5)
+        if os.clock() > timeout then return end
+    end
+end
+
+runKeyCheck()
+
+if not keyResult.valid then
+    print("[WE SERVER] ❌ ما دخل مفتاح صالح")
+    if isUserBanned() or getWrongCount() >= MAX_WRONG_ATTEMPTS then
+        pcall(function() LP:Kick("🚫 محظور من WE SERVER\n🛒 " .. DISCORD_URL) end)
+        task.wait(1)
+        pcall(function() TS:Teleport(game.PlaceId) end)
+    end
+    return
+end
+
+actionLog.sessions = actionLog.sessions + 1
+sendWebhook("🚀 بدء تشغيل (وضع البرق ⚡)", {
+    {name = "🔑 المفتاح", value = keyResult.key and ("`" .. keyResult.key:sub(1, 20) .. "`") or "-", inline = false},
+    {name = "⚡ النظام", value = "سرقة وحدة → سيرفر جديد → تلقائي", inline = false},
+}, 0x22C55E)
+
+local MODE_NONE, MODE_NORMAL, MODE_AUTO, MODE_REPEAT = 0, 1, 2, 3
+local currentMode = MODE_NONE
+local currentLoop = 0
+local stopRequested = false
+local isFrozen, isInvisible, isMinimized, isBuying = false, false, false, false
+local camConnection, invisibleChar = nil, nil
+local watchdogRunning, antiAfkRunning = false, false
+local antiAfkIdledConn = nil
+local savedCamSubject, savedCamType = nil, nil
+local savedTransparency = {}
+local currentTargetPos = nil
+
+local lastAlive = os.clock()
+local function alive() lastAlive = os.clock() end
+
+local antiAfkBeat = os.clock()
+
+local function startAntiAFK()
+    if not CONFIG.AntiAFKEnabled or antiAfkRunning then return end
+    antiAfkRunning = true
+    antiAfkBeat = os.clock()
+    pcall(function()
+        if LP.Idled then
+            antiAfkIdledConn = LP.Idled:Connect(function()
+                pcall(function()
+                    VirtualUser:CaptureController()
+                    VirtualUser:ClickButton2(Vector2.new())
+                end)
+            end)
+        end
+    end)
+    task.spawn(function()
+        local keys = {Enum.KeyCode.W, Enum.KeyCode.A, Enum.KeyCode.S, Enum.KeyCode.D, Enum.KeyCode.Space}
+        while antiAfkRunning and not stopRequested do
+            task.wait(CONFIG.AntiAFKInterval)
+            if stopRequested or not antiAfkRunning then break end
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+            pcall(function()
+                VIM:SendMouseMoveEvent(300 + math.random(-150, 150), 300 + math.random(-150, 150), game)
+            end)
+            pcall(function()
+                local k = keys[math.random(1, #keys)]
+                VIM:SendKeyEvent(true, k, false, game)
+                task.wait(0.05)
+                VIM:SendKeyEvent(false, k, false, game)
+            end)
+            antiAfkBeat = os.clock()
+            alive()
+        end
+        antiAfkRunning = false
+    end)
+end
+
+local function stopAntiAFK()
+    antiAfkRunning = false
+    if antiAfkIdledConn then
+        pcall(function() antiAfkIdledConn:Disconnect() end)
+        antiAfkIdledConn = nil
+    end
+end
+
+task.spawn(function()
+    while true do
+        task.wait(20)
+        if CONFIG.AntiAFKEnabled and currentMode ~= MODE_NONE and not stopRequested then
+            if os.clock() - antiAfkBeat > 100 then
+                antiAfkRunning = false
+                task.wait(0.5)
+                startAntiAFK()
+            end
+        end
+    end
+end)
+
+local function makeInstant(p)
+    if p and p:IsA("ProximityPrompt") then
+        pcall(function()
+            p.HoldDuration = 0
+            p.RequiresLineOfSight = false
+            p.MaxActivationDistance = 30
+        end)
+    end
+end
+
+local promptCache = {}
+local promptCacheReady = false
+
+task.spawn(function()
+    local okL, list = pcall(function() return workspace:GetDescendants() end)
+    if okL and list then
+        for i = 1, #list, 300 do
+            local lastI = math.min(i + 299, #list)
+            pcall(function()
+                for j = i, lastI do
+                    local v = list[j]
+                    if v:IsA("ProximityPrompt") then
+                        makeInstant(v)
+                        if v.Name == "StartProximity" then
+                            promptCache[v] = true
+                        end
+                    end
+                end
+            end)
+            task.wait()
+        end
+    end
+    promptCacheReady = true
+end)
+
+pcall(function()
+    workspace.DescendantAdded:Connect(function(c)
+        if c:IsA("ProximityPrompt") then
+            makeInstant(c)
+            if c.Name == "StartProximity" then promptCache[c] = true end
+        end
+    end)
+    workspace.DescendantRemoving:Connect(function(c)
+        if promptCache[c] then promptCache[c] = nil end
+    end)
+end)
+
+local function getStartPrompts()
+    local out = {}
+    for p in pairs(promptCache) do
+        if p.Parent then table.insert(out, p) else promptCache[p] = nil end
+    end
+    return out
+end
+
+local function getHRP()
+    return LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+end
+
+-- ✅ معدّل: ما يعمل Anchor + يجبر الشخصية تقف
+local function teleportHRP(pos)
+    local hrp = getHRP()
+    if not hrp then return false end
+
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum.Sit = false
+            hum.PlatformStand = false
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end)
+    end
+
+    pcall(function()
+        hrp.CFrame = CFrame.new(pos)
+        hrp.AssemblyLinearVelocity = Vector3.zero
+        hrp.AssemblyAngularVelocity = Vector3.zero
+    end)
+    task.wait(fw(0.5)) -- ⏱️ انتظار أطول للنزول على الأرض
+
+    local hrp2 = getHRP()
+    if hrp2 then
+        local d = (Vector3.new(hrp2.Position.X, 0, hrp2.Position.Z) - Vector3.new(pos.X, 0, pos.Z)).Magnitude
+        if d > 30 then
+            pcall(function()
+                hrp2.CFrame = CFrame.new(pos)
+                hrp2.AssemblyLinearVelocity = Vector3.zero
+            end)
+            task.wait(fw(0.25))
+        end
+    end
+    return true
+end
+
+task.spawn(function()
+    while true do
+        task.wait(2)
+        if CONFIG.VoidGuard and currentMode ~= MODE_NONE and not stopRequested and currentTargetPos then
+            local hrp = getHRP()
+            if hrp then
+                local y = hrp.Position.Y
+                if y ~= y or y < CONFIG.VoidLimitY or y > 5000 then
+                    pcall(function()
+                        hrp.CFrame = CFrame.new(currentTargetPos + Vector3.new(0, 3, 0))
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                    end)
+                end
+            end
+        end
+    end
+end)
+
+-- ✅ معدّل: بدون Anchor - يوقف السرعة بس
+local function freezeCharacter()
+    if not CONFIG.FreezeCharacter then return end
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hum then
+        pcall(function()
+            hum.WalkSpeed = 0
+            hum.JumpPower = 0
+        end)
+        isFrozen = true
+    end
+    if hrp then
+        pcall(function()
+            hrp.AssemblyLinearVelocity = Vector3.zero
+            hrp.AssemblyAngularVelocity = Vector3.zero
+        end)
+    end
+end
+
+-- ✅ معدّل: يفك أي Anchor احتياط
+local function unfreezeCharacter()
+    if not isFrozen then return end
+    local char = LP.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum.WalkSpeed = 16
+            hum.JumpPower = 50
+        end)
+    end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        pcall(function() hrp.Anchored = false end)
+    end
+    isFrozen = false
+end
+
+LP.CharacterAdded:Connect(function(char)
+    isFrozen = false
+    isInvisible = false
+    invisibleChar = nil
+    savedTransparency = {}
+    char:WaitForChild("HumanoidRootPart", 5)
+    if currentMode ~= MODE_NONE and not stopRequested then
+        task.wait(0.5)
+        freezeCharacter()
+        if currentTargetPos then
+            pcall(function()
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then hrp.CFrame = CFrame.new(currentTargetPos + Vector3.new(0, 3, 0)) end
+            end)
+        end
+    end
+end)
+
+local function makeInvisible()
+    if not CONFIG.InvisibleWhileRobbing then return end
+    local char = LP.Character
+    if not char then return end
+    if invisibleChar == char and isInvisible then return end
+    savedTransparency = {}
+    invisibleChar = char
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") then
+            savedTransparency[part] = part.Transparency
+            pcall(function() part.Transparency = 1 end)
+        end
+    end
+    isInvisible = true
+end
+
+local function makeVisible()
+    if not isInvisible then return end
+    local char = invisibleChar or LP.Character
+    if not char then isInvisible = false; invisibleChar = nil; return end
+    for _, part in ipairs(char:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("Decal") then
+            pcall(function() part.Transparency = savedTransparency[part] or 0 end)
+        end
+    end
+    isInvisible = false
+    invisibleChar = nil
+end
+
+local function lockCameraOnButton(targetPos)
+    if camConnection then
+        pcall(function() camConnection:Disconnect() end)
+        camConnection = nil
+    end
+    local cam = workspace.CurrentCamera
+    if cam and not savedCamSubject then
+        savedCamSubject = cam.CameraSubject
+        savedCamType = cam.CameraType
+    end
+    local lastUpdate = 0
+    local frameGap = 1 / (CONFIG.CameraFPS or 15)
+    camConnection = RunService.RenderStepped:Connect(function()
+        if stopRequested then return end
+        local now = os.clock()
+        if now - lastUpdate < frameGap then return end
+        lastUpdate = now
+        pcall(function()
+            local c = workspace.CurrentCamera
+            if not c then return end
+            if c.CameraType ~= Enum.CameraType.Scriptable then c.CameraType = Enum.CameraType.Scriptable end
+            if c.CameraSubject ~= nil then c.CameraSubject = nil end
+            local camPos = targetPos + Vector3.new(0, CONFIG.CamHeight, CONFIG.CamDistance)
+            local lookAt = targetPos + Vector3.new(0, CONFIG.CamLookHeight, 0)
+            c.CFrame = CFrame.lookAt(camPos, lookAt)
+            c.Focus = CFrame.new(lookAt)
+        end)
+    end)
+end
+
+local function unlockCamera()
+    if camConnection then
+        pcall(function() camConnection:Disconnect() end)
+        camConnection = nil
+    end
+    pcall(function()
+        local cam = workspace.CurrentCamera
+        if cam then
+            local char = LP.Character
+            if char then
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum then cam.CameraSubject = hum end
+            end
+            cam.CameraType = savedCamType or Enum.CameraType.Custom
+        end
+    end)
+    savedCamSubject = nil
+    savedCamType = nil
+end
+
+local function hasTool()
+    local function chk(n)
+        local x = tostring(n):lower()
+        local isLockpick = x:find("فاتح اقفال") or x:find("فاتح أقفال")
+                        or x:find("lockpick") or x:find("lock pick")
+        local isAdvanced = x:find("متقدم") or x:find("advanced") or x:find("advance")
+        return isLockpick and not isAdvanced
+    end
+    local char = LP.Character
+    if char then
+        for _, t in ipairs(char:GetChildren()) do
+            if t:IsA("Tool") and chk(t.Name) then return t end
+        end
+    end
+    local bp = LP:FindFirstChild("Backpack")
+    if bp then
+        for _, t in ipairs(bp:GetChildren()) do
+            if t:IsA("Tool") and chk(t.Name) then return t end
+        end
+    end
+    return nil
+end
+
+local function getPromptPos(p)
+    local parent = p.Parent
+    if not parent then return nil end
+    if parent:IsA("BasePart") then return parent.Position end
+    local part = parent:FindFirstChildWhichIsA("BasePart")
+    if part then return part.Position end
+    if parent.Parent then
+        local sib = parent.Parent:FindFirstChild("MainCashier")
+        if sib and sib:IsA("BasePart") then return sib.Position end
+    end
+    return nil
+end
+
+local function findClosestPromptTo(targetPos)
+    local best, bestDist = nil, 999999
+
+    for p in pairs(promptCache) do
+        if p.Parent then
+            local pos = getPromptPos(p)
+            if pos then
+                local d = (pos - targetPos).Magnitude
+                if d < bestDist then bestDist = d; best = p end
+            end
+        end
+    end
+
+    if not best or bestDist > CONFIG.ButtonRadius then
+        local ok, list = pcall(function() return workspace:GetDescendants() end)
+        if ok and list then
+            for _, p in ipairs(list) do
+                if p:IsA("ProximityPrompt") and p.Parent then
+                    local pos = getPromptPos(p)
+                    if pos then
+                        local d = (pos - targetPos).Magnitude
+                        if d < bestDist then bestDist = d; best = p end
+                    end
+                end
+            end
+        end
+    end
+
+    if best and bestDist <= CONFIG.ButtonRadius then return best end
+    return nil
+end
+
+local function buttonExists(targetPos)
+    local p = findClosestPromptTo(targetPos)
+    if p and p.Enabled then return true, p end
+    return false, nil
+end
+
+local function isLocationBusy(pos)
+    for _, pl in ipairs(Players:GetPlayers()) do
+        if pl ~= LP and pl.Character then
+            local hrp = pl.Character:FindFirstChild("HumanoidRootPart")
+            if hrp and (hrp.Position - pos).Magnitude < CONFIG.BusyRadius then
+                return true, pl.DisplayName
+            end
+        end
+    end
+    return false, nil
+end
+
+local function clickPromptButton()
+    local pgui = PG:FindFirstChild("ProximityPrompts")
+    if not pgui then return false end
+    for _, obj in ipairs(pgui:GetDescendants()) do
+        if (obj:IsA("TextButton") or obj:IsA("ImageButton")) and obj.AbsoluteSize.X > 40 then
+            local ap = obj.AbsolutePosition
+            local as = obj.AbsoluteSize
+            local cx = ap.X + as.X/2
+            local cy = ap.Y + as.Y/2
+            if not (cx < 120 and cy < 120) then
+                local check = obj.Parent
+                local isValid = false
+                while check do
+                    if check.Name == "ProximityPrompts" then isValid = true; break end
+                    if check == game then break end
+                    check = check.Parent
+                end
+                if isValid then
+                    pcall(function() VIM:SendMouseButtonEvent(cx, cy, 0, true, game, 1) end)
+                    task.wait(0.03)
+                    pcall(function() VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1) end)
+                    for _, c in pairs(safeGetConnections(obj, "MouseButton1Click")) do
+                        if c.Function then task.spawn(c.Function) end
+                    end
+                    pcall(function() obj:Activate() end)
+                    return true
+                end
+            end
+        end
+    end
+    return false
+end
+
+local function clickGui(g)
+    if not g then return false end
+    local clicked = false
+    for _, c in pairs(safeGetConnections(g, "MouseButton1Click")) do
+        if c.Function then task.spawn(c.Function); clicked = true end
+    end
+    pcall(function() g:Activate() end)
+    pcall(function()
+        local ap = g.AbsolutePosition
+        local as = g.AbsoluteSize
+        if as.X > 5 and ap.X > 0 then
+            local cx = ap.X + as.X/2
+            local cy = ap.Y + as.Y/2
+            VIM:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
+            task.wait(0.03)
+            VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
+            clicked = true
+        end
+    end)
+    return clicked
+end
+
+local function findBtn(root, names)
+    if not root then return nil end
+    for _, obj in ipairs(root:GetDescendants()) do
+        if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+            for _, n in ipairs(names) do
+                if obj.Name:lower() == n:lower() then return obj end
+            end
+        end
+    end
+    return nil
+end
+
+-- 🎨 UI
+local SG = Instance.new("ScreenGui")
+SG.Name = "WEServer"
+SG.ResetOnSpawn = false
+SG.DisplayOrder = 999999
+SG.IgnoreGuiInset = true
+SG.Parent = PG
+
+local F = Instance.new("Frame")
+F.Size = UDim2.new(0, 170, 0, 330)
+F.Position = UDim2.new(0.5, -85, 0.5, -165)
+F.BackgroundColor3 = Color3.fromRGB(10, 6, 18)
+F.BorderSizePixel = 0
+F.Active = true
+F.Parent = SG
+Instance.new("UICorner", F).CornerRadius = UDim.new(0, 12)
+
+local FBg = Instance.new("UIGradient")
+FBg.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(38, 16, 60)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(22, 10, 38)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 6, 18))
+}
+FBg.Rotation = 135; FBg.Parent = F
+
+local FStroke = Instance.new("UIStroke")
+FStroke.Color = Color3.fromRGB(160, 80, 240)
+FStroke.Thickness = 1.5; FStroke.Transparency = 0.15
+FStroke.Parent = F
+
+local Header = Instance.new("Frame")
+Header.Size = UDim2.new(1, 0, 0, 30)
+Header.BackgroundColor3 = Color3.fromRGB(28, 14, 45)
+Header.BorderSizePixel = 0; Header.Parent = F
+Instance.new("UICorner", Header).CornerRadius = UDim.new(0, 12)
+
+local Logo = Instance.new("Frame")
+Logo.Size = UDim2.new(0, 18, 0, 18)
+Logo.Position = UDim2.new(0, 8, 0, 6)
+Logo.BackgroundColor3 = Color3.fromRGB(160, 80, 240)
+Logo.Parent = Header
+Instance.new("UICorner", Logo).CornerRadius = UDim.new(0, 5)
+
+local LogoText = Instance.new("TextLabel")
+LogoText.Size = UDim2.new(1, 0, 1, 0)
+LogoText.BackgroundTransparency = 1
+LogoText.Text = "W"
+LogoText.TextColor3 = Color3.fromRGB(255, 255, 255)
+LogoText.Font = Enum.Font.GothamBlack; LogoText.TextSize = 10
+LogoText.Parent = Logo
+
+local HTitle = Instance.new("TextLabel")
+HTitle.Size = UDim2.new(1, -74, 1, 0)
+HTitle.Position = UDim2.new(0, 30, 0, 0)
+HTitle.BackgroundTransparency = 1
+HTitle.Text = "WE SERVER v4.22 ⚡"
+HTitle.TextColor3 = Color3.fromRGB(230, 200, 255)
+HTitle.Font = Enum.Font.GothamBlack; HTitle.TextSize = 8
+HTitle.TextXAlignment = Enum.TextXAlignment.Left
+HTitle.Parent = Header
+
+local MinBtn = Instance.new("TextButton")
+MinBtn.Size = UDim2.new(0, 18, 0, 18)
+MinBtn.Position = UDim2.new(1, -44, 0, 6)
+MinBtn.BackgroundColor3 = Color3.fromRGB(55, 25, 90)
+MinBtn.Text = "−"; MinBtn.TextColor3 = Color3.fromRGB(220, 180, 255)
+MinBtn.Font = Enum.Font.GothamBlack; MinBtn.TextSize = 12
+MinBtn.AutoButtonColor = false; MinBtn.Parent = Header
+Instance.new("UICorner", MinBtn).CornerRadius = UDim.new(0, 5)
+
+local XBtn = Instance.new("TextButton")
+XBtn.Size = UDim2.new(0, 18, 0, 18)
+XBtn.Position = UDim2.new(1, -24, 0, 6)
+XBtn.BackgroundColor3 = Color3.fromRGB(90, 25, 50)
+XBtn.Text = "✕"; XBtn.TextColor3 = Color3.fromRGB(255, 180, 200)
+XBtn.Font = Enum.Font.GothamBlack; XBtn.TextSize = 9
+XBtn.AutoButtonColor = false; XBtn.Parent = Header
+Instance.new("UICorner", XBtn).CornerRadius = UDim.new(0, 5)
+
+local Content = Instance.new("Frame")
+Content.Size = UDim2.new(1, 0, 1, -30)
+Content.Position = UDim2.new(0, 0, 0, 30)
+Content.BackgroundTransparency = 1; Content.Parent = F
+
+local StatusCard = Instance.new("Frame")
+StatusCard.Size = UDim2.new(1, -16, 0, 26)
+StatusCard.Position = UDim2.new(0, 8, 0, 6)
+StatusCard.BackgroundColor3 = Color3.fromRGB(22, 11, 35)
+StatusCard.BorderSizePixel = 0; StatusCard.Parent = Content
+Instance.new("UICorner", StatusCard).CornerRadius = UDim.new(0, 7)
+
+local StatusDot = Instance.new("Frame")
+StatusDot.Size = UDim2.new(0, 6, 0, 6)
+StatusDot.Position = UDim2.new(0, 8, 0.5, -3)
+StatusDot.BackgroundColor3 = Color3.fromRGB(160, 160, 180)
+StatusDot.Parent = StatusCard
+Instance.new("UICorner", StatusDot).CornerRadius = UDim.new(1, 0)
+
+local StatusText = Instance.new("TextLabel")
+StatusText.Size = UDim2.new(1, -24, 1, 0)
+StatusText.Position = UDim2.new(0, 20, 0, 0)
+StatusText.BackgroundTransparency = 1
+StatusText.Text = "جاهز ⚡"
+StatusText.TextColor3 = Color3.fromRGB(225, 205, 255)
+StatusText.Font = Enum.Font.GothamBold; StatusText.TextSize = 9
+StatusText.TextXAlignment = Enum.TextXAlignment.Left
+StatusText.Parent = StatusCard
+
+local function setStatus(txt, col)
+    StatusText.Text = txt
+    StatusDot.BackgroundColor3 = col or Color3.fromRGB(160, 160, 180)
+end
+
+local InfoCard = Instance.new("Frame")
+InfoCard.Size = UDim2.new(1, -16, 0, 112)
+InfoCard.Position = UDim2.new(0, 8, 0, 38)
+InfoCard.BackgroundColor3 = Color3.fromRGB(22, 11, 35)
+InfoCard.BorderSizePixel = 0; InfoCard.Parent = Content
+Instance.new("UICorner", InfoCard).CornerRadius = UDim.new(0, 7)
+
+local function mkInfoRow(parent, text, y)
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(0.5, -6, 0, 18)
+    l.Position = UDim2.new(0, 8, 0, y)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = Color3.fromRGB(160, 130, 220)
+    l.Font = Enum.Font.GothamBold; l.TextSize = 8
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = parent
+    local v = Instance.new("TextLabel")
+    v.Size = UDim2.new(0.5, -6, 0, 18)
+    v.Position = UDim2.new(0.5, 0, 0, y)
+    v.BackgroundTransparency = 1
+    v.Text = "—"
+    v.TextColor3 = Color3.fromRGB(210, 170, 255)
+    v.Font = Enum.Font.GothamBlack; v.TextSize = 9
+    v.TextXAlignment = Enum.TextXAlignment.Right
+    v.Parent = parent
+    return v
+end
+
+local LoopValue = mkInfoRow(InfoCard, "الدورة", 2)
+local SessionValue = mkInfoRow(InfoCard, "منذ التشغيل", 20)
+SessionValue.TextColor3 = Color3.fromRGB(255, 255, 100)
+local TimeValue = mkInfoRow(InfoCard, "⚡ الوضع", 38)
+TimeValue.Text = "برق"
+TimeValue.TextColor3 = Color3.fromRGB(255, 220, 100)
+local LocValue = mkInfoRow(InfoCard, "الموقع", 56)
+local WatchdogValue = mkInfoRow(InfoCard, "🛡️ Anti-AFK", 74)
+WatchdogValue.Text = "شغال"
+WatchdogValue.TextColor3 = Color3.fromRGB(150, 255, 150)
+local KeyTimeValue = mkInfoRow(InfoCard, "🔑 المفتاح", 92)
+KeyTimeValue.TextColor3 = Color3.fromRGB(100, 255, 200)
+
+local AutoBtn = Instance.new("TextButton")
+AutoBtn.Size = UDim2.new(1, -16, 0, 30)
+AutoBtn.Position = UDim2.new(0, 8, 0, 158)
+AutoBtn.BackgroundColor3 = Color3.fromRGB(120, 50, 200)
+AutoBtn.Text = "⚡ سرقة + انتقال (برق)"
+AutoBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+AutoBtn.Font = Enum.Font.GothamBlack; AutoBtn.TextSize = 9
+AutoBtn.AutoButtonColor = false; AutoBtn.Parent = Content
+Instance.new("UICorner", AutoBtn).CornerRadius = UDim.new(0, 8)
+
+local AutoGrad = Instance.new("UIGradient")
+AutoGrad.Color = ColorSequence.new{
+    ColorSequenceKeypoint.new(0, Color3.fromRGB(170, 70, 250)),
+    ColorSequenceKeypoint.new(0.5, Color3.fromRGB(130, 50, 210)),
+    ColorSequenceKeypoint.new(1, Color3.fromRGB(90, 30, 160))
+}
+AutoGrad.Rotation = 30; AutoGrad.Parent = AutoBtn
+
+local NormalBtn = Instance.new("TextButton")
+NormalBtn.Size = UDim2.new(0.5, -11, 0, 26)
+NormalBtn.Position = UDim2.new(0, 8, 0, 194)
+NormalBtn.BackgroundColor3 = Color3.fromRGB(40, 20, 70)
+NormalBtn.Text = "مرة وحده"
+NormalBtn.TextColor3 = Color3.fromRGB(220, 180, 255)
+NormalBtn.Font = Enum.Font.GothamBold; NormalBtn.TextSize = 8
+NormalBtn.AutoButtonColor = false; NormalBtn.Parent = Content
+Instance.new("UICorner", NormalBtn).CornerRadius = UDim.new(0, 8)
+
+local RepeatBtn = Instance.new("TextButton")
+RepeatBtn.Size = UDim2.new(0.5, -11, 0, 26)
+RepeatBtn.Position = UDim2.new(0.5, 3, 0, 194)
+RepeatBtn.BackgroundColor3 = Color3.fromRGB(50, 30, 90)
+RepeatBtn.Text = "تكرار لا نهائي"
+RepeatBtn.TextColor3 = Color3.fromRGB(220, 180, 255)
+RepeatBtn.Font = Enum.Font.GothamBold; RepeatBtn.TextSize = 8
+RepeatBtn.AutoButtonColor = false; RepeatBtn.Parent = Content
+Instance.new("UICorner", RepeatBtn).CornerRadius = UDim.new(0, 8)
+
+local StopBtn = Instance.new("TextButton")
+StopBtn.Size = UDim2.new(1, -16, 0, 26)
+StopBtn.Position = UDim2.new(0, 8, 0, 226)
+StopBtn.BackgroundColor3 = Color3.fromRGB(55, 18, 35)
+StopBtn.Text = "وقف"
+StopBtn.TextColor3 = Color3.fromRGB(255, 180, 200)
+StopBtn.Font = Enum.Font.GothamBold; StopBtn.TextSize = 9
+StopBtn.AutoButtonColor = false; StopBtn.Parent = Content
+Instance.new("UICorner", StopBtn).CornerRadius = UDim.new(0, 8)
+
+local DiscordBtn = Instance.new("TextButton")
+DiscordBtn.Size = UDim2.new(1, -16, 0, 24)
+DiscordBtn.Position = UDim2.new(0, 8, 0, 258)
+DiscordBtn.BackgroundColor3 = Color3.fromRGB(80, 60, 180)
+DiscordBtn.Text = "نسخ الدسكورد"
+DiscordBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+DiscordBtn.Font = Enum.Font.GothamBlack; DiscordBtn.TextSize = 8
+DiscordBtn.AutoButtonColor = false; DiscordBtn.Parent = Content
+Instance.new("UICorner", DiscordBtn).CornerRadius = UDim.new(0, 8)
+
+task.spawn(function()
+    while true do
+        task.wait(1)
+        if not stopRequested then
+            SessionValue.Text = formatClockTime(os.time() - scriptStartTime)
+        end
+        if keyResult.remaining and keyResult.remaining > 0 then
+            local rem = keyResult.remaining - (os.time() - scriptStartTime)
+            KeyTimeValue.Text = rem > 0 and ("⏳ " .. fmtT(rem)) or "🔴 انتهى!"
+        else
+            KeyTimeValue.Text = "♾️ دائم"
+        end
+    end
+end)
+
+XBtn.MouseButton1Click:Connect(function() F.Visible = false end)
+
+MinBtn.MouseButton1Click:Connect(function()
+    if isMinimized then
+        isMinimized = false
+        MinBtn.Text = "−"
+        Content.Visible = true
+        TweenService:Create(F, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+            Size = UDim2.new(0, 170, 0, 330)
+        }):Play()
+    else
+        isMinimized = true
+        MinBtn.Text = "□"
+        Content.Visible = false
+        TweenService:Create(F, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+            Size = UDim2.new(0, 170, 0, 30)
+        }):Play()
+    end
+end)
+
+DiscordBtn.MouseButton1Click:Connect(function()
+    if setclipboard then pcall(setclipboard, DISCORD_URL) end
+    DiscordBtn.Text = "تم النسخ!"
+    task.wait(1.5)
+    DiscordBtn.Text = "نسخ الدسكورد"
+end)
+
+local drag, dIn, sPos, fPos
+Header.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then
+        drag = true; sPos = i.Position; fPos = F.Position
+        i.Changed:Connect(function()
+            if i.UserInputState == Enum.UserInputState.End then drag = false end
+        end)
+    end
+end)
+Header.InputChanged:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseMovement then dIn = i end
+end)
+UIS.InputChanged:Connect(function(i)
+    if i == dIn and drag then
+        local d = i.Position - sPos
+        F.Position = UDim2.new(fPos.X.Scale, fPos.X.Offset + d.X, fPos.Y.Scale, fPos.Y.Offset + d.Y)
+    end
+end)
+
+local function forceCloseMarket()
+    local market = PG:FindFirstChild("Market")
+    if not market then return end
+    local closeBtn = nil
+    for _, obj in ipairs(market:GetDescendants()) do
+        if obj:IsA("TextButton") or obj:IsA("ImageButton") then
+            local n = obj.Name:lower()
+            if n == "close" or n == "x" or n == "exit" or n == "quit" then
+                closeBtn = obj; break
+            end
+        end
+    end
+    if closeBtn then
+        pcall(function() closeBtn:Activate() end)
+        for _, c in pairs(safeGetConnections(closeBtn, "MouseButton1Click")) do
+            if c.Function then task.spawn(c.Function) end
+        end
+    end
+    pcall(function() market.Enabled = false end)
+    pcall(function() market.Visible = false end)
+    task.wait(fw(0.2))
+end
+
+local function buy()
+    if isBuying then return false end
+    isBuying = true
+    actionLog.buyCount = actionLog.buyCount + 1
+    local deadline = os.clock() + CONFIG.BuyTimeout
+
+    local ok, result = pcall(function()
+        setStatus("🛒 شراء سريع...", Color3.fromRGB(255, 180, 100))
+        if hasTool() then
+            forceCloseMarket()
+            return true
+        end
+        local backPos = nil
+        local hrp0 = getHRP()
+        if hrp0 then backPos = hrp0.Position end
+
+        local seller = nil
+        local mf = workspace:FindFirstChild("MarketFolder")
+        if mf then seller = mf:FindFirstChild("SellerNPC") end
+        if not seller then seller = workspace:FindFirstChild("SellerNPC", true) end
+        if not seller then return false end
+        local part = seller:IsA("BasePart") and seller or seller:FindFirstChildWhichIsA("BasePart", true)
+        if not part then return false end
+        unfreezeCharacter()
+        teleportHRP(part.Position + Vector3.new(0, 3, 2.5))
+        task.wait(fw(0.4))
+        freezeCharacter()
+        lockCameraOnButton(part.Position)
+        task.wait(fw(0.6))
+
+        local prompt = seller:FindFirstChild("Buy") or seller:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if prompt then
+            pcall(function()
+                prompt.HoldDuration = 0
+                prompt.RequiresLineOfSight = false
+                prompt.MaxActivationDistance = 30
+                prompt.Enabled = true
+            end)
+        end
+
+        local marketOpened = false
+        for attempt = 1, 6 do
+            if stopRequested or os.clock() > deadline then break end
+            alive()
+            clickPromptButton()
+            if prompt then pcall(function() fireproximityprompt(prompt) end) end
+            task.wait(fw(0.35))
+            local market = PG:FindFirstChild("Market")
+            if market then
+                local mf2 = market:FindFirstChild("MainFrame")
+                if mf2 and mf2.Visible then marketOpened = true; break end
+            end
+        end
+
+        if not marketOpened then
+            unlockCamera()
+            if backPos then teleportHRP(backPos) end
+            return false
+        end
+
+        unlockCamera()
+        task.wait(fw(0.4))
+
+        local market = PG:FindFirstChild("Market")
+        local mf2 = market and market:FindFirstChild("MainFrame")
+        if not mf2 then if backPos then teleportHRP(backPos) end return false end
+        local list = mf2:FindFirstChild("ItemsList")
+        if not list then if backPos then teleportHRP(backPos) end return false end
+
+        local target = nil
+        for _, item in ipairs(list:GetChildren()) do
+            if item:IsA("GuiObject") then
+                local txt = ""
+                for _, d in ipairs(item:GetDescendants()) do
+                    if d:IsA("TextLabel") or d:IsA("TextButton") then
+                        local t = ""
+                        pcall(function() t = d.Text end)
+                        if t ~= "" then txt = txt .. " " .. t end
+                    end
+                end
+                local tl = txt:lower()
+                local isLockpick = tl:find("فاتح اقفال") or tl:find("فاتح أقفال")
+                                or tl:find("lockpick") or tl:find("lock pick")
+                local isAdvanced = tl:find("متقدم") or tl:find("advanced") or tl:find("advance")
+                if isLockpick and not isAdvanced then target = item; break end
+            end
+        end
+        if not target then if backPos then teleportHRP(backPos) end return false end
+
+        local addBtn = nil
+        for _, d in ipairs(target:GetDescendants()) do
+            if (d:IsA("TextButton") or d:IsA("ImageButton")) and
+               (d.Name == "Click" or d.Name == "AddToCart" or d.Name == "Add") then
+                addBtn = d; break
+            end
+        end
+        if addBtn then clickGui(addBtn); task.wait(fw(0.6)) end
+
+        local cart = mf2:FindFirstChild("Cart")
+        local buyBtn = nil
+        if cart then
+            local buyFrame = cart:FindFirstChild("Buy")
+            if buyFrame then
+                buyBtn = buyFrame:FindFirstChild("Click") or buyFrame
+            else
+                buyBtn = findBtn(cart, {"Click", "Buy"})
+            end
+        end
+        if buyBtn then clickGui(buyBtn); task.wait(fw(0.6)) end
+
+        forceCloseMarket()
+        if backPos then teleportHRP(backPos) end
+        return hasTool() ~= nil
+    end)
+
+    isBuying = false
+    if not ok then
+        warn("[BUY] خطأ: " .. tostring(result))
+        actionLog.errors = actionLog.errors + 1
+        return false
+    end
+    return result
+end
+
+local function forceBuyBeforeRob()
+    if hasTool() then return true end
+    for attempt = 1, CONFIG.BuyAttempts do
+        if stopRequested then return false end
+        alive()
+        setStatus("🛒 شراء (" .. attempt .. "/" .. CONFIG.BuyAttempts .. ")", Color3.fromRGB(255, 180, 100))
+        local bought = buy()
+        if bought and hasTool() then return true end
+        task.wait(fw(0.8))
+    end
+    return hasTool() ~= nil
+end
+
+-- 💰 سرقة محسّنة - بدون Anchor + A/D للميني جيم
+local function robAt(targetPos, name, prompt)
+    setStatus("💰 نسرق " .. name, Color3.fromRGB(255, 130, 190))
+    LocValue.Text = name
+    actionLog.robCount = actionLog.robCount + 1
+    alive()
+    currentTargetPos = targetPos
+
+    -- ✅ نجبر الشخصية تقف
+    local char = LP.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum.Sit = false
+            hum.PlatformStand = false
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+        end)
+    end
+
+    local tool = hasTool()
+    if tool and hum then
+        pcall(function() hum:EquipTool(tool) end)
+    end
+    task.wait(fw(0.3))
+
+    freezeCharacter() -- (الآن WalkSpeed=0 بدون Anchor)
+    makeInvisible()
+    lockCameraOnButton(targetPos)
+    task.wait(fw(0.5)) -- انتظار عشان تنزل على الأرض
+
+    local success = false
+    local startT = os.clock()
+    local attempt = 0
+    local keySpamOn = false
+    local promptRef = prompt
+
+    -- 🎮 A/D/Space spammer
+    if CONFIG.KeySpamEnabled then
+        task.spawn(function()
+            while true do
+                if not keySpamOn or stopRequested then
+                    task.wait(0.05)
+                else
+                    pcall(function()
+                        VIM:SendKeyEvent(true, Enum.KeyCode.A, false, game)
+                        task.wait(CONFIG.KeySpamInterval)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.A, false, game)
+                    end)
+                    if stopRequested or not keySpamOn then continue end
+                    task.wait(0.02)
+                    pcall(function()
+                        VIM:SendKeyEvent(true, Enum.KeyCode.D, false, game)
+                        task.wait(CONFIG.KeySpamInterval)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.D, false, game)
+                    end)
+                    if stopRequested or not keySpamOn then continue end
+                    task.wait(0.02)
+                    pcall(function()
+                        VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                        task.wait(CONFIG.KeySpamInterval)
+                        VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                    end)
+                    task.wait(0.02)
+                end
+            end
+        end)
+    end
+
+    -- 🎯 3 ضغطات سريعة على الزر
+    for b = 1, 3 do
+        if stopRequested then break end
+        if not hasTool() then break end
+        if not promptRef or not promptRef.Parent then break end
+
+        attempt += 1
+        alive()
+        setStatus("⚡ نضغط " .. name .. " (" .. b .. "/3)", Color3.fromRGB(200, 160, 255))
+
+        if LP.Character then
+            local h = LP.Character:FindFirstChildOfClass("Humanoid")
+            if h then
+                local t2 = hasTool()
+                if t2 then
+                    local equipped = h:FindFirstChildOfClass("Tool")
+                    if equipped ~= t2 then pcall(function() h:EquipTool(t2) end) end
+                end
+            end
+        end
+
+        if promptRef.Enabled then
+            pcall(function() fireproximityprompt(promptRef) end)
+            clickPromptButton()
+        end
+        task.wait(0.05)
+    end
+
+    -- 🎮 مرحلة الميني جيم
+    local minigameStarted = false
+    while (os.clock() - startT) < CONFIG.RobTimeout do
+        if stopRequested then break end
+        if not hasTool() then break end
+
+        if promptRef and promptRef.Parent and not promptRef.Enabled then
+            if not minigameStarted then
+                minigameStarted = true
+                keySpamOn = true
+                setStatus("🎮 ميني جيم " .. name, Color3.fromRGB(255, 220, 100))
+            end
+        elseif promptRef and promptRef.Parent and promptRef.Enabled then
+            if minigameStarted then break end
+            setStatus("⚡ نحاول " .. name, Color3.fromRGB(200, 160, 255))
+            pcall(function() fireproximityprompt(promptRef) end)
+            clickPromptButton()
+        elseif not promptRef or not promptRef.Parent then
+            break
+        end
+
+        task.wait(0.1)
+    end
+
+    keySpamOn = false
+    task.wait(0.3)
+
+    -- ✅ تحقق
+    if hasTool() then
+        success = false
+    else
+        task.wait(0.6)
+        if promptRef and promptRef.Parent and promptRef.Enabled then
+            setStatus("🔄 نحاول ثاني " .. name, Color3.fromRGB(255, 200, 100))
+            for retry = 1, 2 do
+                if stopRequested then break end
+                if not hasTool() then success = true; break end
+                if not promptRef or not promptRef.Parent then success = true; break end
+                pcall(function() fireproximityprompt(promptRef) end)
+                clickPromptButton()
+                task.wait(1.5)
+            end
+            if not success and (not hasTool() or not promptRef or not promptRef.Parent) then
+                success = true
+            end
+        else
+            success = true
+        end
+    end
+
+    if success then
+        setStatus("✅ سرقة تمت!", Color3.fromRGB(150, 255, 150))
+        logAction("💰 سرقة ناجحة", name)
+    else
+        setStatus("⚠️ فشل " .. name, Color3.fromRGB(255, 200, 100))
+        actionLog.errors = actionLog.errors + 1
+    end
+
+    unlockCamera()
+    makeVisible()
+    return success
+end
+
+-- 🌍 انتقال سيرفر
+local function hopServer()
+    setStatus("🌍 ننتقل سيرفر جديد...", Color3.fromRGB(180, 180, 255))
+    actionLog.serverHop = actionLog.serverHop + 1
+    unfreezeCharacter()
+    unlockCamera()
+    makeVisible()
+
+    markVisited(game.JobId)
+
+    local loaderCode = 'loadstring(game:HttpGet("' .. SCRIPT_URL .. '"))()'
+
+    local queueFns = {
+        queue_on_teleport,
+        queueonteleport,
+        getgenv and getgenv().queue_on_teleport,
+        getgenv and getgenv().queueonteleport,
+        syn and syn.queue_on_teleport,
+        syn and syn.queueonteleport,
+        fluxus and fluxus.queue_on_teleport,
+        fluxus and fluxus.queueonteleport,
+        Krnl and Krnl.QueueOnTeleport,
+    }
+    local queueSaved = false
+    for _, fn in ipairs(queueFns) do
+        if type(fn) == "function" then
+            if pcall(fn, loaderCode) then queueSaved = true; break end
+        end
+    end
+
+    if queueSaved then
+        print("[WE SERVER] ✅ queue_on_teleport محفوظ")
+        setStatus("🌍 انتقال + سكربت محفوظ ✅", Color3.fromRGB(150, 255, 150))
+        task.wait(0.5)
+    else
+        local savedPaths = {}
+        for _, p in ipairs({
+            "we_server_loader.lua",
+            "autoexec/we_server.lua",
+            "AutoExecute/we_server.lua",
+            "Delta/autoexec/we_server.lua",
+        }) do
+            if pcall(writefile, p, loaderCode) then table.insert(savedPaths, p) end
+        end
+
+        print("═══════════════════════════════════════════════")
+        print("[WE SERVER] ⚠️ إيكسكيوتورك (Delta) ما يدعم queue_on_teleport")
+        print("[WE SERVER] 💾 حفظت لودر — فعّل Auto-Execute في Delta")
+        for _, f in ipairs(savedPaths) do print("[WE SERVER]    📄 " .. f) end
+        print("[WE SERVER] 📋 المحتوى:")
+        print(loaderCode)
+        print("═══════════════════════════════════════════════")
+
+        setStatus("⚠️ Delta: فعّل Auto-Execute", Color3.fromRGB(255, 150, 100))
+        task.wait(2)
+    end
+
+    local servers = {}
+    for i = 1, 3 do
+        local ok, result = pcall(function() return TS:GetPublicServersAsync(game.PlaceId) end)
+        if ok and result and #result > 0 then servers = result; break end
+        task.wait(1)
+    end
+
+    if #servers == 0 then
+        pcall(function() TS:Teleport(game.PlaceId) end)
+        return
+    end
+
+    local currentJob = game.JobId
+    local fresh, low, any = {}, {}, {}
+    for _, s in ipairs(servers) do
+        if s.id ~= currentJob and s.playing < s.maxPlayers then
+            if not wasRecent(s.id) then
+                if s.playing <= 1 then table.insert(fresh, s)
+                elseif s.playing <= 3 then table.insert(low, s)
+                else table.insert(any, s) end
+            end
+        end
+    end
+
+    local pick = nil
+    if #fresh > 0 then pick = fresh[math.random(1, #fresh)]
+    elseif #low > 0 then pick = low[math.random(1, #low)]
+    elseif #any > 0 then pick = any[math.random(1, #any)] end
+
+    if pick then
+        pcall(function() TS:TeleportToPlaceInstance(game.PlaceId, pick.id) end)
+    else
+        pcall(function() TS:Teleport(game.PlaceId) end)
+    end
+end
+
+local function countdown(seconds)
+    if seconds <= 0 then return true end
+    local startT = os.clock()
+    while true do
+        if stopRequested then return false end
+        alive()
+        if (os.clock() - startT) >= seconds then break end
+        task.wait(0.2)
+    end
+    return true
+end
+
+local function runOneCycle()
+    alive()
+    local w = 0
+    while (not LP.Character or not LP.Character:FindFirstChild("HumanoidRootPart")) and not stopRequested do
+        task.wait(0.3); w += 0.3
+        alive()
+        if w > 15 then break end
+    end
+    if stopRequested then return "stopped" end
+
+    local w2 = 0
+    while not promptCacheReady and w2 < 4 and not stopRequested do
+        task.wait(0.3); w2 += 0.3
+    end
+
+    freezeCharacter()
+    makeVisible()
+    if not countdown(CONFIG.StartDelay) then return "stopped" end
+
+    local locs = getActiveLocations()
+    for i, loc in ipairs(locs) do
+        if stopRequested then return "stopped" end
+        alive()
+
+        unfreezeCharacter()
+        makeVisible()
+        currentTargetPos = loc.pos
+        teleportHRP(loc.pos + Vector3.new(0, 3, 2) + sessionOffset)
+        task.wait(fw(0.5)) -- ⏱️ انتظار أطول للنزول
+        freezeCharacter()
+
+        local exists, prompt = buttonExists(loc.pos)
+        if not exists then
+            actionLog.skipped = actionLog.skipped + 1
+            setStatus("⏭️ " .. loc.name .. ": ما فيه زر", Color3.fromRGB(180, 180, 255))
+        else
+            local busy, who = isLocationBusy(loc.pos)
+            if busy then
+                actionLog.busy = actionLog.busy + 1
+                setStatus("⚠️ مشغول (" .. tostring(who) .. ")", Color3.fromRGB(255, 200, 100))
+            else
+                local canRob = forceBuyBeforeRob()
+                if canRob and hasTool() then
+                    local ok = robAt(loc.pos, loc.name, prompt)
+                    if ok then
+                        return "robbed"
+                    end
+                end
+            end
+        end
+        makeVisible()
+
+        if not CONFIG.OneRobPerServer and i < #locs then
+            if not countdown(CONFIG.WaitBetweenCashiers) then return "stopped" end
+        end
+    end
+
+    return "empty"
+end
+
+local function startWatchdog()
+    if watchdogRunning then return end
+    watchdogRunning = true
+    task.spawn(function()
+        while watchdogRunning and not stopRequested do
+            task.wait(CONFIG.WatchdogInterval)
+            if stopRequested or not watchdogRunning then break end
+            if currentMode == MODE_NONE then
+                WatchdogValue.Text = "ينتظر"
+                WatchdogValue.TextColor3 = Color3.fromRGB(180, 180, 180)
+            else
+                WatchdogValue.Text = "✅ شغال"
+                WatchdogValue.TextColor3 = Color3.fromRGB(150, 255, 150)
+            end
+        end
+        watchdogRunning = false
+    end)
+end
+
+local function stopWatchdog() watchdogRunning = false end
+
+local function safeStart(name, fn)
+    return function()
+        task.spawn(function()
+            local ok, err = pcall(fn)
+            if not ok then
+                warn("[WE SERVER] ❌ خطأ: " .. tostring(err))
+                setStatus("❌ خطأ", Color3.fromRGB(255, 100, 100))
+                actionLog.errors = actionLog.errors + 1
+            end
+        end)
+    end
+end
+
+local function cleanupState()
+    stopWatchdog(); stopAntiAFK()
+    unfreezeCharacter(); unlockCamera(); makeVisible()
+end
+
+local startAuto, startNormal, startRepeat
+
+startAuto = function()
+    if currentMode ~= MODE_NONE then return end
+    currentMode = MODE_AUTO
+    stopRequested = false
+    actionLog.autoStart = true
+    setStatus("⚡ وضع البرق شغال", Color3.fromRGB(150, 255, 150))
+    logAction("⚡ وضع البرق", "سرقة وحدة → سيرفر جديد")
+    startWatchdog(); startAntiAFK()
+    task.spawn(function()
+        while not stopRequested do
+            alive()
+            currentLoop += 1
+            LoopValue.Text = tostring(currentLoop)
+
+            local okc, res = pcall(runOneCycle)
+            if not okc then
+                warn("[CYCLE] خطأ: " .. tostring(res))
+                actionLog.errors = actionLog.errors + 1
+                task.wait(2)
+            end
+            if stopRequested then break end
+
+            if CONFIG.OneRobPerServer then
+                if res == "robbed" then
+                    setStatus("✅ سرقنا! ننتقل سيرفر جديد", Color3.fromRGB(150, 255, 150))
+                else
+                    setStatus("⏭️ سيرفر فاضي - ننتقل", Color3.fromRGB(180, 180, 255))
+                end
+                task.wait(0.4)
+                hopServer()
+                task.wait(12)
+            else
+                if not countdown(CONFIG.WaitBetweenCashiers) then break end
+                if not stopRequested then
+                    hopServer()
+                    task.wait(15)
+                end
+            end
+        end
+        currentMode = MODE_NONE
+        makeVisible()
+        setStatus("وقفنا", Color3.fromRGB(255, 150, 150))
+    end)
+end
+
+startNormal = function()
+    if currentMode ~= MODE_NONE then return end
+    currentMode = MODE_NORMAL
+    stopRequested = false
+    actionLog.normalStart = true
+    setStatus("🔄 مرة وحده", Color3.fromRGB(180, 140, 255))
+    startWatchdog(); startAntiAFK()
+    task.spawn(function()
+        currentLoop += 1
+        LoopValue.Text = tostring(currentLoop)
+        local okc, errc = pcall(runOneCycle)
+        if not okc then warn("[CYCLE] " .. tostring(errc)) end
+        setStatus("✅ خلصنا", Color3.fromRGB(150, 255, 150))
+        currentMode = MODE_NONE
+        makeVisible()
+    end)
+end
+
+startRepeat = function()
+    if currentMode ~= MODE_NONE then return end
+    currentMode = MODE_REPEAT
+    stopRequested = false
+    actionLog.repeatStart = true
+    setStatus("♻️ تكرار لا نهائي", Color3.fromRGB(200, 160, 255))
+    startWatchdog(); startAntiAFK()
+    task.spawn(function()
+        while not stopRequested do
+            alive()
+            currentLoop += 1
+            LoopValue.Text = tostring(currentLoop)
+            local okc, errc = pcall(runOneCycle)
+            if not okc then
+                actionLog.errors = actionLog.errors + 1
+                task.wait(2)
+            end
+            if not stopRequested then
+                if not countdown(CONFIG.WaitBetweenCashiers) then break end
+            end
+        end
+        currentMode = MODE_NONE
+        makeVisible()
+        setStatus("⏹️ وقفنا", Color3.fromRGB(255, 150, 150))
+    end)
+end
+
+AutoBtn.MouseButton1Click:Connect(safeStart("⚡ AUTO", startAuto))
+NormalBtn.MouseButton1Click:Connect(safeStart("🔄 NORMAL", startNormal))
+RepeatBtn.MouseButton1Click:Connect(safeStart("♻️ REPEAT", startRepeat))
+
+StopBtn.MouseButton1Click:Connect(function()
+    stopRequested = true
+    currentMode = MODE_NONE
+    isBuying = false
+    actionLog.stopCount = actionLog.stopCount + 1
+    logAction("⏹️ إيقاف", "يدوي")
+    cleanupState()
+    LocValue.Text = "—"
+    setStatus("⏹️ وقفنا", Color3.fromRGB(255, 150, 150))
+end)
+
+startAntiAFK()
+
+if CONFIG.AutoStart then
+    task.spawn(function()
+        task.wait(CONFIG.AutoStartDelay)
+        if currentMode == MODE_NONE and not stopRequested then
+            startAuto()
+        end
+    end)
+end
+
+task.spawn(function()
+    while true do
+        task.wait(15)
+        if currentMode ~= MODE_NONE and not stopRequested then
+            if os.clock() - lastAlive > CONFIG.HangTimeout then
+                local m = currentMode
+                sendWebhook("🔄 استعادة من تعليق", {}, 0xFFA500)
+                stopRequested = true
+                currentMode = MODE_NONE
+                pcall(cleanupState)
+                task.wait(2)
+                stopRequested = false
+                task.wait(0.5)
+                if m == MODE_AUTO then startAuto()
+                elseif m == MODE_NORMAL then startNormal()
+                elseif m == MODE_REPEAT then startRepeat() end
+            end
+        end
+    end
+end)
+
+if keyResult.key and keyResult.remaining and keyResult.remaining > 0 then
+    task.spawn(function()
+        local expiresAt = os.time() + keyResult.remaining
+        while os.time() < expiresAt do
+            task.wait(15)
+            if isKeyBlacklisted(keyResult.key) or isUserBanned() then break end
+        end
+        addToBlacklist(keyResult.key, "انتهاء تلقائي")
+        banUser("انتهاء صلاحية المفتاح")
+        pcall(function() LP:Kick("⏰ انتهت مدة المفتاح!\n🛒 " .. DISCORD_URL) end)
+        task.wait(1)
+        pcall(function() TS:Teleport(game.PlaceId) end)
+    end)
+end
+
+local exitReported = false
+pcall(function()
+    Players.PlayerRemoving:Connect(function(pl)
+        if pl == LP and not exitReported then
+            exitReported = true
+            sendWebhook("🚪 خروج / انتقال سيرفر", {
+                {name = "💰 سرقات هالجلسة", value = tostring(actionLog.robCount), inline = true},
+                {name = "⏱️ المدة", value = fmtT(os.time() - scriptStartTime), inline = true},
+            }, 0x3B82F6)
+        end
+    end)
+end)
+
+print("═══════════════════════════════════════════════")
+print("[WE SERVER] ✅ v4.22 ⚡ وضع البرق جاهز!")
+print("[WE SERVER] 💰 سرقة: 3 ضغطات + A/D للميني جيم")
+print("[WE SERVER] 🦵 الشخصية تقف طبيعي (بدون Anchor)")
+print("[WE SERVER] 🚫 ما يرجع لسيرفر قديم (30 دقيقة)")
+print("═══════════════════════════════════════════════")
